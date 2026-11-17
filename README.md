@@ -30,3 +30,4 @@ Team-AND/
 | 위치 | 내용 |
 |---|---|
 | `개인폴더/김다혜/P1` | 웹캠(MediaPipe)으로 손 인식 → micro:bit → uHand 서보 제어 |
+| `개인폴더/김윤하/P1` | IR 리모컨 → micro:bit(MakeCode) → 서보 제어, 리모컨/비전 모드 전환 + PC 상태 보고 |
