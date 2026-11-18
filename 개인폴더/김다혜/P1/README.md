@@ -51,3 +51,22 @@ PC → micro:bit, 115200bps, 한 줄에 하나씩:
 - 손가락이 덜 펴지거나 덜 굽혀지면 `hand_tracker.py`의 `RATIO_RANGE` 값을 조정하세요. 화면에 실시간 각도가 표시돼요.
 - 특정 손가락이 반대로 움직이면 `microbit/main.py`의 `REVERSE`를 `True`로 바꾸세요.
 - 서보가 떨리면 `SMOOTHING`을 올리거나 `SEND_INTERVAL`을 늘리세요.
+
+## Hiwonder uHand 보드용 버전 (실제 로봇에서 동작 확인)
+
+uHand 확장보드는 micro:bit 핀으로 서보를 직접 구동하지 않고, 보드 칩에 시리얼(P12=TX, P8=RX, 115200bps) 명령을 보내는 방식이에요. 이 보드에서는 아래 파일을 써 주세요.
+
+| 파일 | 설명 |
+|---|---|
+| `microbit/main_hiwonder.py` | PC에서 받은 각도를 Hiwonder 서보 명령(0x55 0x55 프레임)으로 변환해 보드에 전송 |
+| `pc/hand_tracker_v2.py` | 엄지 인식 개선 + 자동 보정 (실행 후 주먹↔펼치기를 3~4번, R 키로 리셋) |
+
+```bash
+python hand_tracker_v2.py --port COM5
+```
+
+micro:bit 화면: 체크(✓) = 실행 중, 왼쪽 위 점 = PC 신호 수신, 가운데 점 = 로봇에 명령 전송.
+
+보정값(우리 로봇 기준): 엄지는 방향 반대(`REVERSE`), 펄스 범위 800(펼침)~2200(접힘). 다른 손가락은 900~2100.
+
+> 기존 `microbit/main.py`는 서보가 micro:bit 핀에 직접 연결된 경우용이에요.
