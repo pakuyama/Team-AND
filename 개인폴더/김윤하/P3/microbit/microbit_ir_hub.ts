@@ -27,16 +27,17 @@
    |<< 회전대 왼쪽   >>| 회전대 오른쪽   CH-/CH+ 움직임 간격 5/10/20도
    >|| 펴기<->주먹   0 중립   7 가위  8 바위  9 보  200+ 좋아요  100+ 숫자 세기
    EQ 수동 모드(리모컨+웹) <-> 비전 모드
-   micro:bit 로고 터치: 움직일 때 나는 소리 켜기/끄기
+   micro:bit 로고 터치: 움직이기 전 알림음(0.5초) 켜기/끄기
 */
 
 // ---------------- 설정 ----------------
 const IR_PIN = DigitalPin.P1
 const MOVE_TIME = 150                  // 서보 이동 시간(ms)
 const REPEAT_MS = 150                  // 누르고 있을 때 반복 간격(ms)
-// 움직이는 동안 소리 (micro:bit V2 내장 스피커). 로고(금색 부분)를 터치하면 소리 켜기/끄기
+// 움직이기 전 알림음 (micro:bit V2 내장 스피커). 로고(금색 부분)를 터치하면 소리 켜기/끄기
 const BEEP_FREQ = 880                  // 음 높이(Hz)
-const BEEP_MIN_MS = 150                // 최소 소리 길이(ms). 보통은 서보 이동 시간만큼 남
+const BEEP_MS = 500                    // 소리 길이(ms). 소리가 끝난 뒤에 움직임
+const BEEP_GAP = 800                   // 이 시간(ms) 넘게 멈춰 있다가 움직일 때만 소리 (계속 조작 중에는 안 남)
 //                엄지 검지 중지 약지 새끼 회전대
 const OPEN_A = [50, 130, 130, 130, 130, 90]
 const CLOSE_A = [130, 50, 50, 50, 50, 90]
@@ -70,8 +71,7 @@ let nextRepeat = 0
 let lastCode = -1
 let pcApplied = false
 let soundOn = true
-let soundPlaying = false
-let soundUntil = 0         // 이 시각까지 소리 유지 (계속 움직이면 늘어남)
+let lastMoveAt = -100000   // 마지막으로 움직인 시각
 
 // 숫자 세기 동작 (비트0=엄지 ... 비트4=새끼, 1=폄)
 const SEQ_BITS = [0, 2, 6, 14, 30, 31, 0]
@@ -274,8 +274,6 @@ input.onButtonPressed(Button.B, function () {
 // 로고 터치: 알림음 켜기/끄기 (켜면 짧게 두 번, 끄면 낮게 한 번)
 input.onLogoEvent(TouchButtonEvent.Pressed, function () {
     soundOn = !soundOn
-    music.stopAllSounds()
-    soundPlaying = false
     if (soundOn) {
         music.playTone(988, 80)
         music.playTone(1319, 80)
@@ -300,20 +298,13 @@ basic.forever(function () {
 
     if (dirty) {
         dirty = false
-        sendToBoard()
-        // 움직이는 동안 소리 (비전 모드는 명령이 계속 들어와서 소리 안 냄)
-        if (soundOn && mode == "R") {
-            if (!soundPlaying) {
-                music.ringTone(BEEP_FREQ)          // 멈추라고 할 때까지 계속 울림 (기다리지 않음)
-                soundPlaying = true
-            }
-            soundUntil = input.runningTime() + Math.max(moveTime, BEEP_MIN_MS)
+        // 한동안 멈춰 있다가 움직일 때: 먼저 0.5초 소리 -> 소리가 끝나면 움직임
+        // (비전 모드는 명령이 계속 들어와서 소리 안 냄)
+        if (soundOn && mode == "R" && input.runningTime() - lastMoveAt > BEEP_GAP) {
+            music.playTone(BEEP_FREQ, BEEP_MS)   // 소리가 끝날 때까지 기다림
         }
-    }
-    // 움직임이 끝나면 소리 끄기
-    if (soundPlaying && (input.runningTime() >= soundUntil || !soundOn || mode != "R")) {
-        music.stopAllSounds()
-        soundPlaying = false
+        sendToBoard()                            // 소리 나는 동안 바뀐 값이 있으면 최신 값으로 움직임
+        lastMoveAt = input.runningTime()
     }
     if (modeChanged) {
         modeChanged = false
