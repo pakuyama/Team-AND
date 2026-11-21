@@ -1,5 +1,5 @@
 # micro:bit (MicroPython) — uHand 로봇 손 제어 (Hiwonder 보드 시리얼 방식)
-# PC에서 USB로 "a,b,c,d,e\n"(엄지~소지 각도 0~180)를 받고,
+# PC에서 USB로 "엄지,검지,중지,약지,소지[,손목]\n"(각도 0~180)를 받고,
 # 보드 칩에 P12(TX)/P8(RX) 시리얼로 서보 명령을 보내요.
 # micro:bit 화면: 체크(✓)=실행 중, 왼쪽 위 점=PC 신호 수신, 가운데 점=로봇에 명령 전송
 from microbit import *
@@ -7,19 +7,32 @@ from microbit import *
 SERVO_IDS = [1, 2, 3, 4, 5]          # 엄지, 검지, 중지, 약지, 소지 (보드 서보 번호)
 REVERSE = [True, False, False, False, False]  # 반대로 움직이는 손가락은 True
 PULSE_MIN = [800, 900, 900, 900, 900]     # 각도 0일 때 펄스(us), 손가락별
-PULSE_MAX = [2200, 2100, 2100, 2100, 2100] # 각도 180일 때 펄스(us), 손가락별 (엄지: 800=펼짐, 2200=접힘)
+PULSE_MAX = [2200, 2100, 2100, 2100, 2100] # 각도 180일 때 펄스(us), 손가락별 (엄지: 800=펴짐, 2200=접힘)
 MOVE_TIME = 100    # ms
+
+# 손목 (6번 모터) — PC가 6번째 값을 보내면 움직여요. 처음엔 안전한 범위로 설정
+WRIST_ID = 6
+WRIST_MIN = 1000   # 각도 0일 때
+WRIST_MAX = 2000   # 각도 180일 때
+WRIST_REVERSE = False   # 손목이 반대로 돌면 True
 
 
 def send_to_board(angles):
-    n = len(SERVO_IDS)
-    frame = bytearray([0x55, 0x55, n * 3 + 5, 0x03, n,
-                       MOVE_TIME & 0xff, MOVE_TIME >> 8])
+    pairs = []
     for sid, a, rev, lo, hi in zip(SERVO_IDS, angles, REVERSE, PULSE_MIN, PULSE_MAX):
         a = max(0, min(180, a))
         if rev:
             a = 180 - a
-        p = lo + (hi - lo) * a // 180
+        pairs.append((sid, lo + (hi - lo) * a // 180))
+    if len(angles) >= 6:
+        w = max(0, min(180, angles[5]))
+        if WRIST_REVERSE:
+            w = 180 - w
+        pairs.append((WRIST_ID, WRIST_MIN + (WRIST_MAX - WRIST_MIN) * w // 180))
+    n = len(pairs)
+    frame = bytearray([0x55, 0x55, n * 3 + 5, 0x03, n,
+                       MOVE_TIME & 0xff, MOVE_TIME >> 8])
+    for sid, p in pairs:
         frame += bytes([sid, p & 0xff, p >> 8])
     # 보드로 잠깐 전환해서 보내고 다시 USB로 복귀
     uart.init(baudrate=115200, tx=pin12, rx=pin8)
@@ -32,7 +45,7 @@ def parse(line):
     if not line:
         return None
     parts = line.strip().split(",")
-    if len(parts) != 5:
+    if len(parts) not in (5, 6):   # 5개 = 손가락만, 6개 = 손가락 + 손목
         return None
     try:
         return [int(x) for x in parts]
