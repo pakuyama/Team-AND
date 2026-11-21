@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AiHand 웹 제어</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --text:#1d2330; --muted:#6b7280; --accent:#2563eb; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --line:#e5e7eb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111418; --card:#1b2027; --text:#e8eaed; --muted:#9aa3ae; --accent:#60a5fa; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --line:#2c333d; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:"Malgun Gothic",system-ui,sans-serif; }
+  header { padding:12px 16px; background:var(--card); border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+  header h1 { font-size:18px; margin:0 8px 0 0; }
+  .pill { font-size:13px; padding:4px 10px; border-radius:999px; background:var(--bg); border:1px solid var(--line); }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--bad); margin-right:5px; }
+  .dot.on { background:var(--ok); }
+  main { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:16px; padding:16px; max-width:1300px; margin:auto; }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  h2 { font-size:15px; margin:0 0 10px; }
+  #video { width:100%; border-radius:8px; background:#000; display:block; aspect-ratio:4/3; object-fit:contain; }
+  #modeBox { padding:10px 12px; border-radius:8px; font-size:14px; line-height:1.5; }
+  #modeBox.P { background:color-mix(in srgb, var(--ok) 15%, transparent); }
+  #modeBox.R { background:color-mix(in srgb, var(--warn) 18%, transparent); }
+  #modeBox.X { background:color-mix(in srgb, var(--bad) 15%, transparent); }
+  .servo { display:grid; grid-template-columns:62px 1fr 44px; gap:8px; align-items:center; margin:10px 0 2px; font-size:14px; }
+  .servo input { width:100%; accent-color:var(--accent); }
+  .actual { margin:0 52px 0 70px; height:5px; background:var(--line); border-radius:3px; overflow:hidden; }
+  .actual > div { height:100%; width:50%; background:var(--muted); transition:width .1s; }
+  .ends { display:flex; justify-content:space-between; margin:0 52px 0 70px; font-size:11px; color:var(--muted); }
+  .poses { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  button { font:inherit; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--text); cursor:pointer; }
+  button:active { transform:scale(.97); }
+  .hint { font-size:12px; color:var(--muted); line-height:1.5; margin:8px 0 0; }
+  .seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg button { border:0; border-radius:0; padding:6px 12px; }
+  .seg button.on { background:var(--accent); color:#fff; }
+  .handRow { display:flex; gap:8px; margin-bottom:10px; }
+  .handRow input { flex:1; min-width:0; font:inherit; padding:8px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--text); }
+  .videoWrap { position:relative; }
+  .videoMsg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center;
+              padding:20px; color:#ddd; font-size:14px; line-height:1.6; background:rgba(0,0,0,.6); border-radius:8px; }
+  .videoMsg[hidden] { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🤖 AiHand 웹 제어</h1>
+  <span class="pill"><span id="dotCam" class="dot"></span>카메라</span>
+  <span class="pill"><span id="dotHub" class="dot"></span>micro:bit <span id="port"></span></span>
+  <span class="pill" id="ir">리모컨: -</span>
+</header>
+
+<main>
+  <section>
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px">
+        <h2 style="margin:0">카메라</h2>
+        <div class="seg">
+          <button id="srcPc">💻 웹캠</button>
+          <button id="srcHand">✋ 손 카메라</button>
+        </div>
+        <button id="camBtn" style="padding:6px 14px">📷 카메라 끄기</button>
+      </div>
+      <div id="handRow" class="handRow" hidden>
+        <input id="handUrl" type="text" placeholder="http://192.168.0.20:81/stream" spellcheck="false">
+        <button id="handApply">적용</button>
+      </div>
+      <div class="videoWrap">
+        <img id="video" src="/stream.mjpg" alt="카메라 영상">
+        <div id="videoMsg" class="videoMsg" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <div id="modeBox" class="X">micro:bit 연결을 기다리는 중...</div>
+    </div>
+
+    <div class="card">
+      <h2>손 조종</h2>
+      <div id="servos"></div>
+      <p class="hint">회색 막대는 로봇손의 실제 위치예요. 리모컨으로 움직이면 슬라이더도 따라 움직여요.</p>
+    </div>
+
+    <div class="card">
+      <h2>동작</h2>
+      <div class="poses">
+        <button data-pose="31">✋ 보</button>
+        <button data-pose="0">✊ 바위</button>
+        <button data-pose="6">✌️ 가위</button>
+        <button data-pose="1">👍 좋아요</button>
+        <button data-pose="2">☝️ 하나</button>
+        <button data-pose="mid">↔ 중간</button>
+      </div>
+      <div class="poses" style="margin-top:8px">
+        <button data-pan="160">⟲ 왼쪽</button>
+        <button data-pan="90">회전 가운데</button>
+        <button data-pan="20">⟳ 오른쪽</button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+// microbit_ir_hub.ts 와 같은 값 (엄지는 반대로 장착)
+const NAMES = ["엄지", "검지", "중지", "약지", "새끼", "회전대"];
+const OPEN_A  = [50, 130, 130, 130, 130, 90];
+const CLOSE_A = [130, 50, 50, 50, 50, 90];
+
+// 슬라이더 값: 손가락 0(접힘)~100(펴짐) %, 회전대 0~180 (180 = 왼쪽)
+const sliders = [];
+const actualBars = [];
+const box = document.getElementById("servos");
+NAMES.forEach((name, i) => {
+  const isPan = i === 5;
+  const row = document.createElement("div");
+  row.innerHTML = `
+    <div class="servo"><span>${i + 1}. ${name}</span>
+      <input type="range" min="0" max="${isPan ? 180 : 100}" value="${isPan ? 90 : 50}">
+      <span class="val"></span></div>
+    <div class="actual"><div></div></div>
+    <div class="ends"><span>${isPan ? "오른쪽" : "접힘"}</span><span>${isPan ? "왼쪽" : "펴짐"}</span></div>`;
+  box.appendChild(row);
+  const input = row.querySelector("input");
+  const val = row.querySelector(".val");
+  input.oninput = () => { val.textContent = input.value + (isPan ? "°" : "%"); queueSend(); };
+  val.textContent = input.value + (isPan ? "°" : "%");
+  sliders.push({ input, val, isPan });
+  actualBars.push(row.querySelector(".actual > div"));
+});
+
+function toAngles() {
+  return sliders.map((s, i) => s.isPan ? +s.input.value
+    : CLOSE_A[i] + (OPEN_A[i] - CLOSE_A[i]) * (+s.input.value / 100));
+}
+function setSlider(i, v) {
+  const s = sliders[i];
+  s.input.value = v;
+  s.val.textContent = v + (s.isPan ? "°" : "%");
+}
+
+// 너무 자주 보내지 않도록 묶어서 전송
+let sendTimer = null;
+let lastTouch = -1e9;       // 마지막으로 웹을 조작한 시각
+function queueSend(dur = 150) {
+  lastTouch = performance.now();
+  clearTimeout(sendTimer);
+  sendTimer = setTimeout(() => {
+    fetch("/api/servo", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ angles: toAngles(), dur }) }).catch(() => {});
+  }, 60);
+}
+
+document.querySelectorAll("[data-pose]").forEach(b => b.onclick = () => {
+  const p = b.dataset.pose;
+  for (let i = 0; i < 5; i++) setSlider(i, p === "mid" ? 50 : ((+p >> i) & 1) * 100);
+  queueSend(400);
+});
+document.querySelectorAll("[data-pan]").forEach(b => b.onclick = () => {
+  setSlider(5, +b.dataset.pan);
+  queueSend(400);
+});
+
+// ---------------- 카메라 ----------------
+// 웹캠: PC 웹 서버가 보내는 영상 (/stream.mjpg)
+// 손 카메라: 브라우저가 ESP32에서 바로 받음 -> 이 기기가 ESP32와 같은 와이파이에 있어야 함
+const video = document.getElementById("video");
+const videoMsg = document.getElementById("videoMsg");
+const camBtn = document.getElementById("camBtn");
+const handRow = document.getElementById("handRow");
+const handUrlInput = document.getElementById("handUrl");
+function load(key, def) { try { return localStorage.getItem(key) || def; } catch { return def; } }
+function save(key, v) { try { localStorage.setItem(key, v); } catch {} }
+
+let source = load("camSource", "pc");     // "pc" | "hand"
+let handUrl = load("handUrl", "");
+let cameraOn = true;                      // 웹캠 (서버가 켜고 끔)
+let handOn = true;                        // 손 카메라 (이 화면에서만 켜고 끔)
+let handOk = false;
+let retryTimer = null;
+handUrlInput.value = handUrl;
+
+function showMsg(text) {
+  videoMsg.hidden = !text;
+  videoMsg.innerHTML = text || "";
+}
+function showCamBtn() {
+  const on = source === "hand" ? handOn : cameraOn;
+  camBtn.textContent = on ? "📷 카메라 끄기" : "📷 카메라 켜기";
+}
+function applyCamera() {
+  clearTimeout(retryTimer);
+  document.getElementById("srcPc").classList.toggle("on", source === "pc");
+  document.getElementById("srcHand").classList.toggle("on", source === "hand");
+  handRow.hidden = source !== "hand";
+  handOk = false;
+  video.removeAttribute("src");           // 이전 영상 연결 끊기 (ESP32는 한 곳에만 보낼 수 있음)
+  if (source === "pc") {
+    showMsg("");
+    video.src = "/stream.mjpg";
+  } else if (!handUrl) {
+    showMsg("손 카메라 주소를 입력하고 <b>적용</b>을 누르세요.<br>(ESP32 시리얼 모니터에 나온 주소, 예: http://192.168.0.20:81/stream)");
+  } else if (!handOn) {
+    showMsg("손 카메라 꺼짐");
+  } else {
+    showMsg("손 카메라 연결 중...");
+    video.src = handUrl;
+  }
+  showCamBtn();
+}
+video.onload = () => { if (source === "hand") { handOk = true; showMsg(""); } };
+video.onerror = () => {
+  if (source !== "hand" || !handOn || !handUrl || video.getAttribute("src") !== handUrl) return;
+  handOk = false;
+  showMsg("손 카메라에 연결할 수 없어요.<br>· 이 기기가 ESP32와 <b>같은 와이파이</b>에 있는지<br>· 주소가 맞는지, ESP32 전원이 켜져 있는지<br>· 다른 창에서 손 카메라를 보고 있지 않은지 확인하세요.<br>3초 뒤 다시 시도해요.");
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => { if (source === "hand" && handOn) { video.removeAttribute("src"); video.src = handUrl; } }, 3000);
+};
+
+document.getElementById("srcPc").onclick = () => { source = "pc"; save("camSource", source); applyCamera(); };
+document.getElementById("srcHand").onclick = () => { source = "hand"; save("camSource", source); applyCamera(); };
+document.getElementById("handApply").onclick = () => {
+  let u = handUrlInput.value.trim();
+  if (u && !/^https?:\/\//.test(u)) u = "http://" + u;          // 192.168.0.20:81/stream 처럼 넣어도 됨
+  if (u && !/\/stream$/.test(u) && /^https?:\/\/[^/]+\/?$/.test(u)) {
+    u = u.replace(/\/$/, "").replace(/:\d+$/, "") + ":81/stream";  // IP만 넣으면 영상 주소로
+  }
+  handUrl = u;
+  handUrlInput.value = u;
+  save("handUrl", u);
+  handOn = true;
+  applyCamera();
+};
+handUrlInput.onkeydown = e => { if (e.key === "Enter") document.getElementById("handApply").click(); };
+
+camBtn.onclick = async () => {
+  if (source === "hand") {
+    handOn = !handOn;
+    applyCamera();
+    return;
+  }
+  try {
+    const r = await (await fetch("/api/camera", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ on: !cameraOn }) })).json();
+    cameraOn = r.cameraOn;
+    showCamBtn();
+  } catch {}
+};
+applyCamera();
+
+// 상태 표시
+const modeBox = document.getElementById("modeBox");
+async function poll() {
+  try {
+    const st = await (await fetch("/api/status")).json();
+    document.getElementById("dotCam").classList.toggle("on",
+      source === "hand" ? handOk && handOn : st.camera && st.cameraOn);
+    if (st.cameraOn !== cameraOn) { cameraOn = st.cameraOn; showCamBtn(); }   // 다른 기기에서 바꾼 것도 반영
+    document.getElementById("dotHub").classList.toggle("on", st.connected);
+    document.getElementById("port").textContent = st.port || "";
+    document.getElementById("ir").textContent = "리모컨: " + (st.lastIR || "-");
+    if (!st.connected) {
+      modeBox.className = "X";
+      modeBox.innerHTML = "<b>micro:bit 연결 안 됨</b><br>USB 연결과 microbit_ir_hub 코드를 확인하세요.";
+    } else if (st.mode === "P") {
+      modeBox.className = "R";
+      modeBox.innerHTML = "<b>📷 비전 모드</b> (웹캠 따라하기 중)<br>웹이나 리모컨으로 조종하면 바로 수동 조종으로 돌아와요.";
+    } else {
+      modeBox.className = "P";
+      modeBox.innerHTML = "<b>🎮 수동 조종</b> (리모컨 + 웹)<br>리모컨과 웹 어느 쪽으로든 조종할 수 있어요. 마지막 명령이 적용돼요.";
+    }
+    // 실제 위치 막대
+    st.angles.forEach((a, i) => {
+      const pct = i === 5 ? a / 180 : (a - CLOSE_A[i]) / (OPEN_A[i] - CLOSE_A[i]);
+      actualBars[i].style.width = Math.max(0, Math.min(1, pct)) * 100 + "%";
+    });
+    // 웹을 만지고 있지 않을 때는 슬라이더가 실제 위치(리모컨으로 움직인 것 포함)를 따라감
+    if (st.connected && performance.now() - lastTouch > 1500) {
+      st.angles.forEach((a, i) => setSlider(i, i === 5 ? a
+        : Math.round(Math.max(0, Math.min(1, (a - CLOSE_A[i]) / (OPEN_A[i] - CLOSE_A[i]))) * 100)));
+    }
+  } catch {
+    modeBox.className = "X";
+    modeBox.textContent = "서버에 연결할 수 없어요. web_server.py가 실행 중인지 확인하세요.";
+  }
+}
+setInterval(poll, 300);
+poll();
+</script>
+</body>
+</html>
