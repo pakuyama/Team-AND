@@ -8,7 +8,7 @@
    - 켜기/끄기: micro:bit A+B 동시에 누르기 (또는 PC/무선 명령 "M,C")
    - 카메라에 "특징 학습"으로 손 모양을 학습시켜 두세요 (ID 1~7, 아래 CAM_POSE 표)
    - 움직이기 전 0.5초 알림음 규칙도 그대로 적용돼요
-   - 상태 보고에는 R(수동)로 보내요 (P5 웹·pc_bridge와 호환)
+   - 상태 보고에 C를 보내요 → 같은 폴더의 pc_bridge.ts / 웹에서 "📷 손목 카메라"로 표시·조작
 
   ---- 아래는 P5 원래 설명 ----
   AiHand 로봇 쪽 micro:bit (micro:bit V2 / MakeCode JavaScript)
@@ -44,7 +44,7 @@
   [무선 (pc_bridge.ts와 같은 규칙)]  그룹 RADIO_GROUP, 패킷 첫 바이트 MAGIC
    PC -> 로봇 :  [MAGIC, 'W', a1..a6, 시간L, 시간H]   웹 조종 (언제든 적용, 따라 하기 중이면 수동으로)
                  [MAGIC, 'S', a1..a6, 시간L, 시간H]   따라 하기 (따라 하기 모드일 때만 적용)
-                 [MAGIC, 'M', 'R' 또는 'P']           모드 바꾸기
+                 [MAGIC, 'M', 'R' / 'P' / 'C']        모드 바꾸기 (C = 손목 카메라)
    로봇 -> PC :  [MAGIC, 'A', 모드, a1..a6]           상태 (0.1초마다)
                  [MAGIC, 'I', 버튼코드]               눌린 리모컨 버튼
 
@@ -307,7 +307,7 @@ function radioStatus() {
     let b = pins.createBuffer(9)
     b[0] = MAGIC
     b[1] = 0x41                                        // 'A'
-    b[2] = mode == "P" ? 0x50 : 0x52                   // C(카메라)는 R로 보고 (P5 웹 호환)
+    b[2] = mode == "P" ? 0x50 : (mode == "C" ? 0x43 : 0x52)   // P / C(손목 카메라) / R
     for (let i = 0; i < 6; i++) b[3 + i] = angles[i]
     radio.sendBuffer(b)
 }
@@ -523,7 +523,7 @@ basic.forever(function () {
     }
     let total = 0
     for (let i = 0; i < 6; i++) total += angles[i]
-    serial.writeLine("A," + (mode == "P" ? "P" : "R") + "," + angles.join(",") + "," + total)   // 마지막 값 = 각도 합계(검증용)
+    serial.writeLine("A," + mode + "," + angles.join(",") + "," + total)   // 마지막 값 = 각도 합계(검증용)
     serial.writeLine("R")
     listenUSB(40)
 })
