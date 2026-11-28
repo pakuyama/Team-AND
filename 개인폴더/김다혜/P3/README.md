@@ -1,11 +1,11 @@
 # P3 · 최종 통합: 손목 카메라 따라 하기 (김다혜)
 
 팀 최종 목표 중 **"내부 카메라를 아래로 향하게 두고, 손 동작을 인식해서 따라 하게 함"**을 맡은 부분이에요.
-김윤하 P5(최종)의 `robot_hub.ts`에 **손목 카메라 모드(C)**를 더했어요. P5의 다른 기능은 그대로 동작해요.
+김윤하 P5(최종) 전체를 가져와서 **손목 카메라 모드(C)**를 더한 완성본이에요. 이 폴더 하나로 전부 돌아가고, P5의 다른 기능은 그대로 동작해요.
 
 ```
                          ┌─ IR 리모컨
-PC 웹 (P5) ─ ① pc_bridge ~~무선~~ ② robot_hub_cam ─┼─ 손목 카메라 WonderCam (I2C 0x32)
+PC 웹 ─── ① pc_bridge ~~무선~~ ② robot_hub_cam ─┼─ 손목 카메라 WonderCam (I2C 0x32)
                                                   └─ 확장보드 ─▶ 서보 6개 (알림음 0.5초 후 움직임)
 ```
 
@@ -19,12 +19,16 @@ PC 웹 (P5) ─ ① pc_bridge ~~무선~~ ② robot_hub_cam ─┼─ 손목 카�
 | micro:bit 2개 무선 연결 | 김윤하 P5 — **카메라 모드도 로봇 쪽 ② 혼자 동작, 무선 구성 그대로** |
 | **내부 카메라를 아래로 두고 손 동작 따라 하기** | **김다혜 P3 (이 폴더)** |
 
-## 파일
-| 파일 | 설명 |
-|---|---|
-| `robot_hub_cam.ts` | 로봇 쪽 micro:bit ②에 넣는 코드 (MakeCode JavaScript). P5 `robot_hub.ts` 대신 사용 |
+## 파일 (P5에서 바뀐 점)
+| 파일 | 설명 | P5에서 바뀐 점 |
+|---|---|---|
+| `microbit/robot_hub_cam.ts` | 로봇 쪽 micro:bit ② (P5 `robot_hub.ts` 대신) | 손목 카메라 모드 C 추가, 상태 보고에 C 포함 |
+| `microbit/pc_bridge.ts` | PC 쪽 micro:bit ① | `M,C` 명령 전달, 로봇이 C 모드면 `A,C,...`로 PC에 전달, A 버튼 누르면 화면에 `C` |
+| `web/web_server.py` | 웹 서버 | `/api/mode`에서 `"C"` 허용, 상태 줄 `A,C,...` 받기 |
+| `web/index.html` | 웹 화면 | **📷 손목 카메라** 버튼과 카메라 모드 안내 추가 |
+| `web/run_web.bat`, `web/.gitignore` | 실행 파일 | 그대로 |
 
-PC 쪽 micro:bit ①(`pc_bridge.ts`)과 웹(`web_server.py`, `index.html`)은 **P5 것을 그대로** 써요.
+무선 규칙 추가분: 모드 바꾸기 `[MAGIC, 'M', 'C'(0x43)]`, 상태 `[MAGIC, 'A', 'C'(0x43), 각도 6개]`
 
 ## 준비
 1. **카메라 방향**: 손목 카메라를 아래로 향하게 고정해요. 손은 카메라 아래 20~30cm에서 보여 주세요.
@@ -40,14 +44,17 @@ PC 쪽 micro:bit ①(`pc_bridge.ts`)과 웹(`web_server.py`, `index.html`)은 **
    | 6 | 👋 인사 | 손 펴고 회전대 좌우로 3번 흔들기 |
    | 7 | 🤟 엄지·검지·새끼 | 🤟 |
 
-3. **micro:bit ②**: [MakeCode](https://makecode.microbit.org) 새 프로젝트 → 확장에 `https://github.com/1010Technologies/pxt-makerbit-ir-receiver` 추가 → JavaScript 탭에 `robot_hub_cam.ts` 붙여넣기 → 다운로드 (P5와 같은 방법)
+3. **micro:bit ① (PC 쪽)**: MakeCode 새 프로젝트 → JavaScript 탭에 `microbit/pc_bridge.ts` 붙여넣기 → 다운로드
+4. **micro:bit ② (로봇 쪽)**: [MakeCode](https://makecode.microbit.org) 새 프로젝트 → 확장에 `https://github.com/1010Technologies/pxt-makerbit-ir-receiver` 추가 → JavaScript 탭에 `microbit/robot_hub_cam.ts` 붙여넣기 → 다운로드 (P5와 같은 방법)
+
+5. **웹**: `web/run_web.bat` 실행 (또는 `python web/web_server.py`) → 브라우저에서 화면 열기 (P5와 같은 방법)
 
 ## 사용
-- **카메라 모드 켜기/끄기**: 로봇 쪽 micro:bit의 **A+B 동시에** 누르기 → 화면에 `C`
+- **카메라 모드 켜기/끄기**: 웹의 **📷 손목 카메라** 버튼, 또는 로봇 쪽 micro:bit의 **A+B 동시에** 누르기 → 화면에 `C`
   - 카메라를 못 찾으면 `E`가 뜨고 수동 모드로 남아요
 - 카메라 아래에서 손 모양을 1초 정도 보여 주면 → 알림음 → 로봇 손이 따라 해요 (micro:bit에 ID 번호 표시)
 - 리모컨 버튼을 누르거나 웹으로 조종하면 바로 수동 조종으로 돌아와요 (P5 규칙과 같음)
-- 웹 화면에는 카메라 모드가 "수동 조종"으로 보여요 (P5 웹과 호환되게 상태를 R로 보고)
+- 웹 화면 모드 칸에 "📷 손목 카메라"가 표시돼요
 
 ## 바꿀 수 있는 설정 (`robot_hub_cam.ts` 위쪽)
 - `CAM_POSE`: ID별 손가락 모양 (비트0=엄지 … 비트4=새끼, 1=폄). 예: 숫자 셋 = 14
@@ -55,5 +62,6 @@ PC 쪽 micro:bit ①(`pc_bridge.ts`)과 웹(`web_server.py`, `index.html`)은 **
 - `CAM_STABLE`: 연속 몇 번 같아야 바꿀지 (떨림 방지)
 - `WAVE_ANGLES`: 인사할 때 회전대 각도
 
-## 웹 버튼으로도 켜고 싶다면 (선택)
-로봇 쪽은 무선/USB 명령 `M,C`를 이미 받아요. P5의 `pc_bridge.ts`가 `M,C`를 전달하고, `web_server.py`의 `/api/mode`가 `"C"`를 허용하면 웹에 "📷 손목 카메라" 버튼을 추가할 수 있어요.
+## 테스트 상태
+- 손목 카메라 인식 → 로봇 손 따라 하기는 P2 코드(손목 카메라 단독)로 로봇에서 동작을 확인했어요.
+- 이 폴더의 네 파일은 문법 검사를 통과했지만, 웹 + micro:bit 2개 전체 구성으로 로봇에서 직접 돌려 보지는 않았어요.
