@@ -3,6 +3,10 @@
 [P6](../P6)에 있는 코드를 **micro:bit 2개로 실제로 구현**했습니다.
 구현하면서 **웹 연결이 끊겼다가 다시 연결되기를 반복하는 현상**을 발견하여 수정했습니다.
 
+![micro:bit 2개로 구현한 AiHand](aihand_two_microbit.jpg)
+
+왼쪽 아래가 로봇 손 micro:bit(②), 오른쪽이 PC에 연결한 micro:bit(①)입니다. 웹 화면에서 따라 하기 모드로 손을 인식하고 있습니다.
+
 ```
 PC (web_server.py) ─USB─ micro:bit ① pc_bridge  ~~ 무선 ~~  micro:bit ② robot_hub ─ 확장보드 ─ 서보 6개
                                                                          └ 전원 선
@@ -44,6 +48,7 @@ micro:bit 코드는 바꾸지 않았습니다. 서버만 고치면 됩니다.
 
 ## 폴더 구조
 ```
+aihand_two_microbit.jpg  # 구현 사진
 microbit/
   robot_hub.ts    # ② 로봇 손 micro:bit (P6와 같음)
   pc_bridge.ts    # ① PC 쪽 micro:bit (P6와 같음)
