@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AiHand 웹 제어</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --text:#1d2330; --muted:#6b7280; --accent:#2563eb; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --line:#e5e7eb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111418; --card:#1b2027; --text:#e8eaed; --muted:#9aa3ae; --accent:#60a5fa; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --line:#2c333d; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:"Malgun Gothic",system-ui,sans-serif; }
+  header { padding:12px 16px; background:var(--card); border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+  header h1 { font-size:18px; margin:0 8px 0 0; }
+  .pill { font-size:13px; padding:4px 10px; border-radius:999px; background:var(--bg); border:1px solid var(--line); }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--bad); margin-right:5px; }
+  .dot.on { background:var(--ok); }
+  main { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:16px; padding:16px; max-width:1300px; margin:auto; }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .cardHead { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  h2 { font-size:15px; margin:0; }
+  .videoWrap { position:relative; }
+  #video { width:100%; border-radius:8px; background:#000; display:block; aspect-ratio:4/3; object-fit:contain; }
+  #overlay { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  #rec { position:absolute; top:10px; left:12px; color:#fff; font-size:13px; background:rgba(0,0,0,.5); padding:3px 8px; border-radius:6px; }
+  #rec b { color:#f87171; }
+  #modeBox { padding:10px 12px; border-radius:8px; font-size:14px; line-height:1.5; }
+  #modeBox.R { background:color-mix(in srgb, var(--ok) 15%, transparent); }
+  #modeBox.P { background:color-mix(in srgb, var(--accent) 15%, transparent); }
+  #modeBox.C { background:color-mix(in srgb, #f5a623 18%, transparent); }
+  #modeBox.X { background:color-mix(in srgb, var(--bad) 15%, transparent); }
+  .seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg button { border:0; border-radius:0; padding:8px 14px; }
+  .seg button.on { background:var(--accent); color:#fff; }
+  .servo { display:grid; grid-template-columns:62px 1fr 44px; gap:8px; align-items:center; margin:10px 0 2px; font-size:14px; }
+  .servo input { width:100%; accent-color:var(--accent); }
+  .actual { margin:0 52px 0 70px; height:5px; background:var(--line); border-radius:3px; overflow:hidden; }
+  .actual > div { height:100%; width:50%; background:var(--muted); transition:width .1s; }
+  .ends { display:flex; justify-content:space-between; margin:0 52px 0 70px; font-size:11px; color:var(--muted); }
+  .poses { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  button { font:inherit; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--text); cursor:pointer; }
+  button:active { transform:scale(.97); }
+  .hint { font-size:12px; color:var(--muted); line-height:1.5; margin:8px 0 0; }
+  #calib { margin-top:10px; }
+  #calib[hidden] { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🤖 AiHand 웹 제어</h1>
+  <span class="pill"><span id="dotCam" class="dot"></span>카메라 <span id="fps"></span></span>
+  <span class="pill"><span id="dotHub" class="dot"></span>로봇 손 <span id="port"></span></span>
+  <span class="pill" id="ir">리모컨: -</span>
+</header>
+
+<main>
+  <section>
+    <div class="card">
+      <div class="cardHead">
+        <h2>카메라</h2>
+        <button id="camBtn" style="padding:6px 14px">📷 카메라 끄기</button>
+      </div>
+      <div class="videoWrap">
+        <img id="video" src="/stream.mjpg" alt="카메라 영상">
+        <canvas id="overlay" width="640" height="480"></canvas>
+        <div id="rec"><b>●</b> <span id="clock"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <div class="cardHead">
+        <h2>모드</h2>
+        <div class="seg">
+          <button data-mode="R">🎮 수동 조종</button>
+          <button data-mode="P">✋ 따라 하기</button>
+          <button data-mode="C">📷 손목 카메라</button>
+        </div>
+      </div>
+      <div id="modeBox" class="X">로봇 손 연결을 기다리는 중...</div>
+      <div id="calib" hidden>
+        <div class="poses">
+          <button data-calib="open">✋ 편 손 보정</button>
+          <button data-calib="closed">✊ 주먹 보정</button>
+          <button data-calib="reset">↺ 보정 초기화</button>
+        </div>
+        <p class="hint">손가락이 끝까지 안 펴지거나 안 접히면: 손을 활짝 편 채로 <b>편 손 보정</b>, 주먹을 쥔 채로 <b>주먹 보정</b>을 누르세요.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>손 조종</h2>
+      <div id="servos"></div>
+      <p class="hint">회색 막대는 로봇 손의 실제 위치예요. 만지면 수동 조종으로 바뀌어요.</p>
+    </div>
+
+    <div class="card">
+      <h2>동작</h2>
+      <div class="poses" style="margin-top:10px">
+        <button data-pose="31">✋ 보</button>
+        <button data-pose="0">✊ 바위</button>
+        <button data-pose="6">✌️ 가위</button>
+        <button data-pose="1">👍 좋아요</button>
+        <button data-pose="2">☝️ 하나</button>
+        <button data-pose="mid">↔ 중간</button>
+      </div>
+      <div class="poses" style="margin-top:8px">
+        <button data-pan="160">⟲ 왼쪽</button>
+        <button data-pan="90">회전 가운데</button>
+        <button data-pan="20">⟳ 오른쪽</button>
+      </div>
+      <p class="hint">로봇 손은 움직이기 전에 0.5초 알림음을 내요 (micro:bit 로고를 터치하면 소리 켜기/끄기).</p>
+    </div>
+  </aside>
+</main>
+
+<script>
+// robot_hub.ts 와 같은 값 (엄지는 반대로 장착)
+const NAMES = ["엄지", "검지", "중지", "약지", "새끼", "회전대"];
+const OPEN_A  = [50, 130, 130, 130, 130, 90];
+const CLOSE_A = [130, 50, 50, 50, 50, 90];
+const $ = id => document.getElementById(id);
+function post(url, body) {
+  return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+
+// ---------------- 손 조종 슬라이더 ----------------
+// 슬라이더 값: 손가락 0(접힘)~100(펴짐) %, 회전대 0~180 (180 = 왼쪽)
+const sliders = [];
+const actualBars = [];
+NAMES.forEach((name, i) => {
+  const isPan = i === 5;
+  const row = document.createElement("div");
+  row.innerHTML = `
+    <div class="servo"><span>${i + 1}. ${name}</span>
+      <input type="range" min="0" max="${isPan ? 180 : 100}" value="${isPan ? 90 : 50}">
+      <span class="val"></span></div>
+    <div class="actual"><div></div></div>
+    <div class="ends"><span>${isPan ? "오른쪽" : "접힘"}</span><span>${isPan ? "왼쪽" : "펴짐"}</span></div>`;
+  $("servos").appendChild(row);
+  const input = row.querySelector("input");
+  const val = row.querySelector(".val");
+  input.oninput = () => { val.textContent = input.value + (isPan ? "°" : "%"); queueSend(); };
+  val.textContent = input.value + (isPan ? "°" : "%");
+  sliders.push({ input, val, isPan });
+  actualBars.push(row.querySelector(".actual > div"));
+});
+
+function toAngles() {
+  return sliders.map((s, i) => s.isPan ? +s.input.value
+    : CLOSE_A[i] + (OPEN_A[i] - CLOSE_A[i]) * (+s.input.value / 100));
+}
+function setSlider(i, v) {
+  const s = sliders[i];
+  s.input.value = v;
+  s.val.textContent = v + (s.isPan ? "°" : "%");
+}
+
+// 너무 자주 보내지 않도록 묶어서 전송
+let sendTimer = null;
+let lastTouch = -1e9;       // 마지막으로 웹을 조작한 시각
+function queueSend(dur = 150) {
+  lastTouch = performance.now();
+  modeWant = null;          // 웹으로 조종하면 수동 조종으로 바뀜
+  clearTimeout(sendTimer);
+  sendTimer = setTimeout(() => post("/api/servo", { angles: toAngles(), dur }).catch(() => {}), 60);
+}
+
+document.querySelectorAll("[data-pose]").forEach(b => b.onclick = () => {
+  const p = b.dataset.pose;
+  for (let i = 0; i < 5; i++) setSlider(i, p === "mid" ? 50 : ((+p >> i) & 1) * 100);
+  queueSend(400);
+});
+document.querySelectorAll("[data-pan]").forEach(b => b.onclick = () => {
+  setSlider(5, +b.dataset.pan);
+  queueSend(400);
+});
+
+// ---------------- 카메라 ----------------
+let cameraOn = true;
+function showCamBtn() { $("camBtn").textContent = cameraOn ? "📷 카메라 끄기" : "📷 카메라 켜기"; }
+$("camBtn").onclick = async () => {
+  try {
+    const r = await (await post("/api/camera", { on: !cameraOn })).json();
+    cameraOn = r.cameraOn;
+    showCamBtn();
+  } catch {}
+};
+// CCTV처럼 화면 위에 지금 시각 표시
+function tick() {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  $("clock").textContent = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+setInterval(tick, 1000);
+tick();
+
+// ---------------- 모드 ----------------
+let modeWant = null, modeWantAt = 0;     // 방금 누른 모드 (적용될 때까지 버튼에 먼저 표시)
+function showModeButtons(m) {
+  document.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
+}
+document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => {
+  modeWant = b.dataset.mode;
+  modeWantAt = performance.now();
+  showModeButtons(modeWant);
+  post("/api/mode", { mode: modeWant }).catch(() => {});
+});
+let calibMsg = "", calibMsgUntil = 0;
+document.querySelectorAll("[data-calib]").forEach(b => b.onclick = () => {
+  const ok = window.hand && window.hand.calibrate(b.dataset.calib);
+  calibMsg = ok ? "보정했어요 ✓" : "손이 안 보여서 보정하지 못했어요. 손을 카메라에 보여 주세요.";
+  calibMsgUntil = performance.now() + 2500;
+});
+let robotMode = "";          // 손 인식은 따라 하기 모드일 때만 (아래 module 스크립트가 읽음)
+
+// ---------------- 상태 표시 ----------------
+const modeBox = $("modeBox");
+async function poll() {
+  try {
+    const st = await (await fetch("/api/status")).json();
+    $("dotCam").classList.toggle("on", st.camera && st.cameraOn);
+    $("fps").textContent = st.camera && st.cameraOn ? `${st.fps}fps` : "";
+    if (st.cameraOn !== cameraOn) { cameraOn = st.cameraOn; showCamBtn(); }
+    $("dotHub").classList.toggle("on", st.connected);
+    $("port").textContent = st.port || "";
+    $("ir").textContent = "리모컨: " + (st.lastIR || "-");
+
+    if (modeWant && (st.mode === modeWant || performance.now() - modeWantAt > 4000)) modeWant = null;
+    const mode = modeWant || (st.connected ? st.mode : "");
+    robotMode = st.connected ? st.mode : "";
+    showModeButtons(mode);
+    $("calib").hidden = mode !== "P";
+
+    if (!st.connected) {
+      modeBox.className = "X";
+      modeBox.innerHTML = "<b>로봇 손 연결 안 됨</b><br>· PC에 꽂은 micro:bit(pc_bridge)에 ✓가 떠 있는지<br>· 로봇 손 전원과 무선 그룹 번호가 맞는지 확인하세요.";
+    } else if (mode === "P") {
+      modeBox.className = "P";
+      const h = window.hand || {};
+      modeBox.innerHTML = "<b>✋ 따라 하기</b> (웹캠이 손을 보고 따라 해요)<br>"
+        + (performance.now() < calibMsgUntil ? calibMsg
+           : h.error ? h.error
+           : !h.ready ? "손 인식 준비 중... (처음에는 몇 초 걸려요)"
+           : h.seen ? "손 인식 중 · 로봇 손이 따라 하고 있어요"
+           : "손을 웹캠에 보여 주세요")
+        + "<br><span class='hint'>웹이나 리모컨으로 조종하면 바로 수동 조종으로 돌아와요. (리모컨 EQ = 따라 하기 켜기/끄기)</span>";
+    } else if (mode === "C") {
+      // 손목 카메라 모드 [김다혜 P3]: 로봇 micro:bit가 카메라(WonderCam)를 직접 보고 따라 해요
+      modeBox.className = "C";
+      modeBox.innerHTML = "<b>📷 손목 카메라</b> (로봇 손목 카메라가 손을 보고 따라 해요)<br>"
+        + "카메라 아래 20~30cm에서 학습한 손 모양(ID 1~7)을 1초쯤 보여 주세요. 알림음 뒤에 따라 해요."
+        + "<br><span class='hint'>웹이나 리모컨으로 조종하면 바로 수동 조종으로 돌아와요. (로봇 micro:bit A+B = 카메라 모드 켜기/끄기, 카메라를 못 찾으면 E)</span>";
+    } else {
+      modeBox.className = "R";
+      modeBox.innerHTML = "<b>🎮 수동 조종</b> (리모컨 + 웹)<br>리모컨과 웹 어느 쪽으로든 조종할 수 있어요. 마지막 명령이 적용돼요.";
+    }
+    // 실제 위치 막대
+    st.angles.forEach((a, i) => {
+      const pct = i === 5 ? a / 180 : (a - CLOSE_A[i]) / (OPEN_A[i] - CLOSE_A[i]);
+      actualBars[i].style.width = Math.max(0, Math.min(1, pct)) * 100 + "%";
+    });
+    // 웹을 만지고 있지 않을 때는 슬라이더가 실제 위치(리모컨, 따라 하기 포함)를 따라감
+    if (st.connected && performance.now() - lastTouch > 1500) {
+      st.angles.forEach((a, i) => setSlider(i, i === 5 ? a
+        : Math.round(Math.max(0, Math.min(1, (a - CLOSE_A[i]) / (OPEN_A[i] - CLOSE_A[i]))) * 100)));
+    }
+  } catch {
+    modeBox.className = "X";
+    modeBox.textContent = "서버에 연결할 수 없어요. web_server.py가 실행 중인지 확인하세요.";
+  }
+}
+setInterval(poll, 300);
+poll();
+</script>
+
+<script type="module">
+// ---------------- 손 인식 (브라우저용 MediaPipe) ----------------
+// 웹캠 영상(/stream.mjpg)을 캔버스에 그려서 손을 찾고, 손가락 각도를 서버로 보내요.
+// 따라 하기 모드일 때만 동작해요. (이 화면을 연 기기에서 계산 -> PC 보안 정책과 상관없음)
+import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const OPEN_F  = [50, 130, 130, 130, 130];     // robot_hub.ts 펴기 각도 (엄지~새끼)
+const CLOSE_F = [130, 50, 50, 50, 50];        // 주먹 각도
+// 손가락별 측정값 범위 (엄지: 엄지끝~약지뿌리 거리 / 손바닥 길이, 나머지: 관절 굽힘 각도 합)
+const DEFAULT_RAW = [
+  { open: 1.05, closed: 0.45 },
+  { open: 20, closed: 220 }, { open: 20, closed: 220 }, { open: 20, closed: 220 }, { open: 20, closed: 220 },
+];
+const JOINTS = [[5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20]];
+const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
+               [9,13],[13,14],[14,15],[15,16],[13,17],[0,17],[17,18],[18,19],[19,20]];
+const SMOOTH = 0.5;          // 0 = 즉시 반응, 0.9 = 아주 부드럽게
+const SEND_MS = 80;          // 서버로 보내는 간격
+
+const video = document.getElementById("video");
+const overlay = document.getElementById("overlay");
+const octx = overlay.getContext("2d");
+const grab = document.createElement("canvas");
+grab.width = 640; grab.height = 480;
+const gctx = grab.getContext("2d", { willReadFrequently: true });
+
+const hand = window.hand = { ready: false, seen: false, error: "", raw: null, seenAt: 0, calibrate };
+let rng = loadCalib();
+let fingers = [90, 90, 90, 90, 90];
+let lastSend = 0;
+let landmarker = null;
+
+function loadCalib() {
+  try {
+    const r = JSON.parse(localStorage.getItem("handCalib"));
+    if (Array.isArray(r) && r.length === 5) return r;
+  } catch {}
+  return DEFAULT_RAW.map(r => ({ ...r }));
+}
+function calibrate(what) {
+  if (what === "reset") rng = DEFAULT_RAW.map(r => ({ ...r }));
+  else if (!hand.raw || performance.now() - hand.seenAt > 1000) return false;
+  else hand.raw.forEach((r, i) => { rng[i][what] = r; });
+  try { localStorage.setItem("handCalib", JSON.stringify(rng)); } catch {}
+  return true;
+}
+
+const sub = (a, b) => [a.x - b.x, a.y - b.y, a.z - b.z];
+const norm = v => Math.hypot(v[0], v[1], v[2]);
+function angleAt(a, b, c) {
+  const u = sub(a, b), w = sub(c, b);
+  const cos = (u[0] * w[0] + u[1] * w[1] + u[2] * w[2]) / (norm(u) * norm(w) + 1e-9);
+  return Math.acos(Math.max(-1, Math.min(1, cos))) * 180 / Math.PI;
+}
+function measure(w) {
+  const raw = [norm(sub(w[4], w[13])) / (norm(sub(w[0], w[9])) + 1e-9)];
+  for (const [m, p, d, t] of JOINTS) {
+    raw.push((180 - angleAt(w[0], w[m], w[p])) + (180 - angleAt(w[m], w[p], w[d])) + (180 - angleAt(w[p], w[d], w[t])));
+  }
+  return raw;
+}
+
+function draw(pts) {
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+  if (!pts) return;
+  const W = overlay.width, H = overlay.height;
+  octx.lineWidth = 3;
+  octx.strokeStyle = "#22d3ee";
+  for (const [a, b] of BONES) {
+    octx.beginPath();
+    octx.moveTo(pts[a].x * W, pts[a].y * H);
+    octx.lineTo(pts[b].x * W, pts[b].y * H);
+    octx.stroke();
+  }
+  octx.fillStyle = "#f43f5e";
+  for (const p of pts) { octx.beginPath(); octx.arc(p.x * W, p.y * H, 4, 0, 7); octx.fill(); }
+}
+
+async function init() {
+  try {
+    const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+    landmarker = await HandLandmarker.createFromOptions(files, {
+      baseOptions: { modelAssetPath: "/hand_landmarker.task" },
+      runningMode: "VIDEO", numHands: 1,
+    });
+    hand.ready = true;
+  } catch (e) {
+    hand.error = "손 인식을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침하세요.";
+    console.error(e);
+  }
+}
+
+let lastTs = 0;
+function loop() {
+  setTimeout(loop, 66);                                   // 초당 약 15번
+  if (!landmarker || robotMode !== "P" || !video.naturalWidth) {
+    if (hand.seen) { hand.seen = false; draw(null); }
+    return;
+  }
+  try {
+    gctx.drawImage(video, 0, 0, grab.width, grab.height); // 지금 보이는 웹캠 화면 한 장
+    const ts = Math.max(lastTs + 1, performance.now());
+    lastTs = ts;
+    const res = landmarker.detectForVideo(grab, ts);
+    if (!res.landmarks.length) {
+      hand.seen = false;
+      draw(null);
+      return;
+    }
+    draw(res.landmarks[0]);
+    hand.raw = measure(res.worldLandmarks[0]);
+    hand.seen = true;
+    hand.seenAt = performance.now();
+    hand.raw.forEach((r, i) => {
+      const lo = rng[i].closed, hi = rng[i].open;
+      const openness = Math.max(0, Math.min(1, (r - lo) / (hi - lo + 1e-9)));
+      const target = CLOSE_F[i] + openness * (OPEN_F[i] - CLOSE_F[i]);
+      fingers[i] = SMOOTH * fingers[i] + (1 - SMOOTH) * target;
+    });
+    if (performance.now() - lastSend >= SEND_MS) {
+      lastSend = performance.now();
+      fetch("/api/follow", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fingers }) }).catch(() => {});
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+init();
+loop();
+</script>
+</body>
+</html>
