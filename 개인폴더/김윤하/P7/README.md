@@ -52,4 +52,4 @@ web/
   index.html      # P6와 같음
   run_web.bat
 ```
-자세한 설치·사용법은 [P5 README](../P5/README.md)를 참고하세요.
+자세한 설치·사용법은 [P5 README](../P5/README.md)를 참고하십시오.
