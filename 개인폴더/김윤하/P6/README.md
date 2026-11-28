@@ -1,6 +1,6 @@
 # AiHand 최종 프로젝트 구현 (김윤하 P6)
 
-AiHand 최종 프로젝트를 구현했어요. 코드는 이 폴더에 있고 (P5와 같아요), 자세한 설치·사용법은 [P5 README](../P5/README.md)에 있어요.
+AiHand 최종 프로젝트를 구현했습니다. 코드는 이 폴더에 있고 (P5와 같습니다), 자세한 설치·사용법은 [P5 README](../P5/README.md)에 있습니다.
 
 ![AiHand 최종 프로젝트](aihand_final.jpg)
 
@@ -23,6 +23,6 @@ web/
 ```
 
 ## 지금 연결 상태
-- 아직 **micro:bit가 1개**라서 micro:bit 2개 무선 연결은 하지 못했어요.
-- 그래서 로봇 손 micro:bit를 PC에 바로 연결해서 **연결선이 2개**예요.
-- micro:bit를 하나 더 구하면 `microbit/pc_bridge.ts`를 넣어서 무선으로 바꿀 수 있어요.
+- 아직 **micro:bit가 1개**라서 micro:bit 2개 무선 연결은 하지 못했습니다.
+- 그래서 로봇 손 micro:bit를 PC에 바로 연결하여 **연결선이 2개**입니다.
+- micro:bit를 하나 더 구하면 `microbit/pc_bridge.ts`를 넣어서 무선으로 바꿀 수 있습니다.
